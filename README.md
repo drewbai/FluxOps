@@ -1,9 +1,9 @@
-# 🚀 FluxOps - ML Pipeline Automation with Terraform & GitLab CI/CD
+# 🚀 FluxOps - ML Pipeline Automation with Terraform & GitHub Actions
 
-[![GitLab CI/CD](https://img.shields.io/badge/GitLab-CI%2FCD-orange?logo=gitlab)](https://gitlab.com)
+[![GitHub Actions](https://img.shields.io/badge/GitHub-Actions-blue?logo=github)](https://github.com/features/actions)
 [![Terraform](https://img.shields.io/badge/Terraform-1.5+-purple?logo=terraform)](https://terraform.io)
 [![Azure](https://img.shields.io/badge/Azure-Cloud-blue?logo=microsoft-azure)](https://azure.microsoft.com)
-[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 
 FluxOps is a production-ready ML pipeline infrastructure showcasing **Infrastructure as Code (IaC)**, **automated CI/CD**, and **modular design** for reproducible machine learning operations.
 
@@ -16,7 +16,7 @@ FluxOps is a production-ready ML pipeline infrastructure showcasing **Infrastruc
 
 ## 🎯 Project Goal
 
-Provision and automate an end-to-end ML pipeline using **Terraform** for infrastructure and **GitLab CI/CD** for automation, demonstrating best practices in:
+Provision and automate an end-to-end ML pipeline using **Terraform** for infrastructure and **GitHub Actions** for automation, demonstrating best practices in:
 - ✅ Reproducible infrastructure provisioning
 - ✅ Modular, reusable Terraform design
 - ✅ Automated deployment and testing
@@ -29,8 +29,8 @@ Provision and automate an end-to-end ML pipeline using **Terraform** for infrast
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         GitLab CI/CD                            │
-│  Validate → Plan → Deploy → Test → Teardown                    │
+│                       GitHub Actions                            │
+│  Validate → Plan → Deploy → Test → Destroy                     │
 └─────────────────┬───────────────────────────────────────────────┘
                   │
                   ▼
@@ -60,7 +60,7 @@ Provision and automate an end-to-end ML pipeline using **Terraform** for infrast
 | Component | Purpose | Technology |
 |-----------|---------|------------|
 | **Terraform** | Infrastructure provisioning | HashiCorp Terraform |
-| **GitLab CI/CD** | Automation pipeline | GitLab Pipelines |
+| **GitHub Actions** | Automation pipeline | GitHub Workflows |
 | **Azure Storage** | Model & log persistence | Azure Blob Storage |
 | **Key Vault** | Secrets management | Azure Key Vault |
 | **Function App** | ML inference API | Azure Functions (Python) |
@@ -72,8 +72,8 @@ Provision and automate an end-to-end ML pipeline using **Terraform** for infrast
 ## 🛠️ Tech Stack
 
 - **Infrastructure**: Terraform 1.5+ (modular design)
-- **CI/CD**: GitLab CI/CD
-- **Language**: Python 3.11
+- **CI/CD**: GitHub Actions
+- **Language**: Python 3.12
 - **ML Framework**: scikit-learn
 - **Cloud Platform**: Microsoft Azure
 - **Monitoring**: Azure Application Insights
@@ -85,8 +85,14 @@ Provision and automate an end-to-end ML pipeline using **Terraform** for infrast
 
 ```
 FluxOps/
-├── .gitlab-ci.yml                 # CI/CD pipeline definition
+├── .github/
+│   └── workflows/
+│       └── fluxops-pipeline.yml   # GitHub Actions CI/CD pipeline
 ├── README.md                      # This file
+├── scripts/
+│   ├── hydrate.ps1                # Provision Azure resources
+│   ├── dehydrate.ps1              # Tear down Azure resources
+│   └── upload_model_to_azurite.py # Upload model for local testing
 ├── infra/
 │   └── terraform/
 │       ├── main.tf                # Root infrastructure orchestration

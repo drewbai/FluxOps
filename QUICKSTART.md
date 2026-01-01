@@ -5,9 +5,10 @@
 - [ ] Azure account with active subscription
 - [ ] Azure CLI installed (`az --version`)
 - [ ] Terraform installed (`terraform --version` >= 1.5.0)
-- [ ] Python 3.11+ installed (`python --version`)
+- [ ] Python 3.12+ installed (`python --version`)
 - [ ] Git installed
-- [ ] GitLab account (for CI/CD)
+- [ ] GitHub account (for CI/CD)
+- [ ] Node.js and npm (for Azurite local storage emulator)
 
 ---
 
@@ -38,18 +39,17 @@ az ad sp create-for-rbac --name "fluxops-sp" \
 # Save the output - you'll need these for GitLab CI/CD variables
 ```
 
-### Step 3: Configure GitLab CI/CD Variables
+### Step 3: Configure GitHub Secrets
 
-Navigate to: **GitLab Project → Settings → CI/CD → Variables**
+Navigate to: **GitHub Repository → Settings → Secrets and variables → Actions**
 
-Add these variables (mark as **Protected** and **Masked**):
+Add these repository secrets:
 
 ```
 ARM_CLIENT_ID          = <appId from step 2>
 ARM_CLIENT_SECRET      = <password from step 2>
 ARM_TENANT_ID          = <tenant from step 2>
 ARM_SUBSCRIPTION_ID    = <your-subscription-id>
-AZURE_SUBSCRIPTION_ID  = <your-subscription-id>
 ```
 
 ### Step 4: Customize Configuration
@@ -92,7 +92,9 @@ cd ../../infra/terraform
 terraform destroy
 ```
 
-### Step 6: Deploy via GitLab CI/CD
+### Step 6: Deploy via GitHub Actions or Local Scripts
+
+**Option A: Using GitHub Actions (Recommended for CI/CD)**
 
 ```bash
 # Commit and push to trigger pipeline
@@ -103,21 +105,34 @@ git push origin main
 # Pipeline will automatically:
 # ✓ Validate Terraform
 # ✓ Generate plan
-# ✓ Deploy infrastructure (with manual approval)
+# ✓ Deploy infrastructure
 # ✓ Deploy Function App
 # ✓ Train and upload ML model
 # ✓ Run tests
+```
+
+**Option B: Using Local Scripts (Cost Management)**
+
+```powershell
+# Provision all resources
+.\scripts\hydrate.ps1 -DeployFunctionApp -UploadModel
+
+# When done, tear down to save costs
+.\scripts\dehydrate.ps1
+
+# Bring them back later
+.\scripts\hydrate.ps1 -DeployFunctionApp -UploadModel
 ```
 
 ---
 
 ## 📊 Verify Deployment
 
-### Check GitLab Pipeline
+### Check GitHub Actions
 
-1. Go to **CI/CD → Pipelines**
-2. Select the latest pipeline
-3. Verify all stages pass: Validate → Plan → Deploy → Test
+1. Go to **Actions** tab in your repository
+2. Select the latest workflow run
+3. Verify all jobs pass: Validate → Plan → Deploy → Test
 
 ### Check Azure Resources
 
