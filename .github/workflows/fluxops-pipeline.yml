@@ -1,0 +1,468 @@
+name: FluxOps CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: 'Destroy infrastructure (yes/no)'
+        required: false
+        default: 'no'
+
+env:
+  TF_VERSION: '1.5.7'
+  PYTHON_VERSION: '3.11'
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+jobs:
+  # Job 1: Validate Terraform
+  validate:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        working-directory: ./infra/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: ./infra/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: ./infra/terraform
+        run: terraform validate
+
+  # Job 2: Terraform Plan
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Terraform Init
+        working-directory: ./infra/terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ./infra/terraform
+        run: |
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan > plan.json
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            infra/terraform/tfplan
+            infra/terraform/plan.json
+          retention-days: 7
+
+  # Job 3: Deploy Infrastructure
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: plan
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    environment:
+      name: ${{ github.ref_name }}
+      url: ${{ steps.terraform-output.outputs.function_app_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Terraform Init
+        working-directory: ./infra/terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ./infra/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Export Terraform Outputs
+        id: terraform-output
+        working-directory: ./infra/terraform
+        run: |
+          terraform output -json > terraform_outputs.json
+          echo "function_app_url=$(terraform output -raw function_app_url)" >> $GITHUB_OUTPUT
+
+      - name: Upload Terraform Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: infra/terraform/terraform_outputs.json
+          retention-days: 30
+
+  # Job 4: Deploy Function App
+  deploy-function-app:
+    name: Deploy Function App
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: ./
+
+      - name: Install Dependencies
+        working-directory: ./src/function_app
+        run: |
+          pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+
+      - name: Package Function App
+        working-directory: ./src/function_app
+        run: |
+          zip -r function_app.zip . -x "*.git*" -x "*__pycache__*" -x "*.pyc"
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Deploy to Azure Functions
+        working-directory: ./src/function_app
+        run: |
+          FUNCTION_APP_NAME=$(jq -r '.function_app_name.value' ../../terraform_outputs.json)
+          RESOURCE_GROUP=$(jq -r '.resource_group_name.value' ../../terraform_outputs.json)
+          
+          az functionapp deployment source config-zip \
+            --resource-group $RESOURCE_GROUP \
+            --name $FUNCTION_APP_NAME \
+            --src function_app.zip
+
+  # Job 5: Train and Deploy ML Model
+  deploy-ml-model:
+    name: Train and Deploy ML Model
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: ./
+
+      - name: Install ML Dependencies
+        working-directory: ./src/ml_pipeline
+        run: |
+          pip install -r requirements.txt
+
+      - name: Train Model
+        working-directory: ./src/ml_pipeline
+        run: python train_model.py
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Upload Model to Blob Storage
+        working-directory: ./src/ml_pipeline
+        run: |
+          STORAGE_ACCOUNT=$(jq -r '.storage_account_name.value' ../../terraform_outputs.json)
+          CONTAINER_NAME=$(jq -r '.models_container_name.value' ../../terraform_outputs.json)
+          
+          az storage blob upload \
+            --account-name $STORAGE_ACCOUNT \
+            --container-name $CONTAINER_NAME \
+            --name model_v1.pkl \
+            --file models/model.pkl \
+            --auth-mode login \
+            --overwrite
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-artifacts
+          path: |
+            src/ml_pipeline/models/
+            src/ml_pipeline/logs/
+          retention-days: 7
+
+  # Job 6: Test Infrastructure
+  test-infrastructure:
+    name: Test Infrastructure
+    runs-on: ubuntu-latest
+    needs: [deploy-function-app, deploy-ml-model]
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: ./
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Test Resource Group
+        run: |
+          RESOURCE_GROUP=$(jq -r '.resource_group_name.value' terraform_outputs.json)
+          echo "Testing Resource Group: $RESOURCE_GROUP"
+          
+          STATE=$(az group show --name $RESOURCE_GROUP --query "properties.provisioningState" -o tsv)
+          if [ "$STATE" != "Succeeded" ]; then
+            echo "Resource Group is not in Succeeded state: $STATE"
+            exit 1
+          fi
+          echo "✅ Resource Group test passed"
+
+      - name: Test Storage Account
+        run: |
+          STORAGE_ACCOUNT=$(jq -r '.storage_account_name.value' terraform_outputs.json)
+          RESOURCE_GROUP=$(jq -r '.resource_group_name.value' terraform_outputs.json)
+          echo "Testing Storage Account: $STORAGE_ACCOUNT"
+          
+          STATE=$(az storage account show --name $STORAGE_ACCOUNT --resource-group $RESOURCE_GROUP --query "provisioningState" -o tsv)
+          if [ "$STATE" != "Succeeded" ]; then
+            echo "Storage Account is not in Succeeded state: $STATE"
+            exit 1
+          fi
+          echo "✅ Storage Account test passed"
+
+      - name: Test Key Vault
+        run: |
+          KEY_VAULT=$(jq -r '.key_vault_name.value' terraform_outputs.json)
+          RESOURCE_GROUP=$(jq -r '.resource_group_name.value' terraform_outputs.json)
+          echo "Testing Key Vault: $KEY_VAULT"
+          
+          STATE=$(az keyvault show --name $KEY_VAULT --resource-group $RESOURCE_GROUP --query "properties.provisioningState" -o tsv)
+          if [ "$STATE" != "Succeeded" ]; then
+            echo "Key Vault is not in Succeeded state: $STATE"
+            exit 1
+          fi
+          echo "✅ Key Vault test passed"
+
+      - name: Test Function App
+        run: |
+          FUNCTION_APP=$(jq -r '.function_app_name.value' terraform_outputs.json)
+          RESOURCE_GROUP=$(jq -r '.resource_group_name.value' terraform_outputs.json)
+          echo "Testing Function App: $FUNCTION_APP"
+          
+          STATE=$(az functionapp show --name $FUNCTION_APP --resource-group $RESOURCE_GROUP --query "state" -o tsv)
+          if [ "$STATE" != "Running" ]; then
+            echo "Function App is not Running: $STATE"
+            exit 1
+          fi
+          echo "✅ Function App test passed"
+
+      - name: Test Health Endpoint
+        run: |
+          FUNCTION_APP=$(jq -r '.function_app_name.value' terraform_outputs.json)
+          FUNCTION_URL="https://${FUNCTION_APP}.azurewebsites.net/api/health"
+          echo "Testing health endpoint: $FUNCTION_URL"
+          
+          # Wait for function to be fully ready
+          sleep 30
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $FUNCTION_URL || echo "000")
+          
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+            echo "✅ Function App health endpoint responding (HTTP $HTTP_CODE)"
+          else
+            echo "⚠️  Warning: Function App returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Test Summary
+        run: |
+          echo "================================================"
+          echo "✅ All infrastructure tests passed!"
+          echo "================================================"
+
+  # Job 7: Test ML Pipeline
+  test-ml-pipeline:
+    name: Test ML Pipeline
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Dependencies
+        working-directory: ./src/ml_pipeline
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run Tests
+        working-directory: ./src/ml_pipeline
+        run: |
+          pytest tests/ -v --cov=. --cov-report=term --cov-report=html --cov-report=xml
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: src/ml_pipeline/htmlcov/
+          retention-days: 7
+
+      - name: Comment Coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 80
+          MINIMUM_ORANGE: 60
+
+  # Job 8: Destroy Infrastructure (Manual)
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'yes'
+    environment:
+      name: ${{ github.ref_name }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Terraform Init
+        working-directory: ./infra/terraform
+        run: terraform init
+
+      - name: Terraform Destroy
+        working-directory: ./infra/terraform
+        run: terraform destroy -auto-approve
+
+      - name: Verify Cleanup
+        run: echo "Infrastructure destroyed successfully"

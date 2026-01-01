@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Azure Functions
+.python_packages/
+.vscode/
+local.settings.json
+.funcignore
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Models
+*.pkl
+models/
+logs/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~

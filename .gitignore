@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Azure Functions
+local.settings.json
+.python_packages/
+__blobstorage__/
+__queues__/
+__azurite_db*__.json
+.funcignore
+
+# ML / Data
+*.pkl
+*.h5
+*.onnx
+models/
+logs/
+data/
+*.csv
+*.parquet
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
+# Documentation
+site/
+
+# Secrets
+*.pem
+*.key
+secrets.auto.tfvars
+.env
+
+# OS
+Thumbs.db
+.DS_Store
