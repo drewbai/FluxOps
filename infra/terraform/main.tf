@@ -26,9 +26,6 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-
-  # Skip automatic resource provider registration for faster planning
-  resource_provider_registrations = "none"
 }
 
 # Local variables
