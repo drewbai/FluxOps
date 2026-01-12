@@ -65,6 +65,7 @@ models/
 logs/
 data/
 *.csv
+!FluxOpsIssueImport.csv
 *.parquet
 
 # Testing
