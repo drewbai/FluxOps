@@ -5,7 +5,7 @@
 - [ ] Azure account with active subscription
 - [ ] Azure CLI installed (`az --version`)
 - [ ] Terraform installed (`terraform --version` >= 1.5.0)
-- [ ] Python 3.12+ installed (`python --version`)
+- [ ] Python 3.11 installed (`python --version`)
 - [ ] Git installed
 - [ ] GitHub account (for CI/CD)
 - [ ] Node.js and npm (for Azurite local storage emulator)

@@ -3,7 +3,7 @@
 [![GitHub Actions](https://img.shields.io/badge/GitHub-Actions-blue?logo=github)](https://github.com/features/actions)
 [![Terraform](https://img.shields.io/badge/Terraform-1.5+-purple?logo=terraform)](https://terraform.io)
 [![Azure](https://img.shields.io/badge/Azure-Cloud-blue?logo=microsoft-azure)](https://azure.microsoft.com)
-[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **FluxOps** is a production-ready ML pipeline infrastructure demonstrating modern DevOps and MLOps best practices. This project showcases **Infrastructure as Code (IaC)** with Terraform, **automated CI/CD** with GitHub Actions, and **serverless ML deployment** on Azure.
@@ -68,7 +68,7 @@ Build and automate an end-to-end ML pipeline infrastructure demonstrating:
 | **GitHub Actions** | CI/CD automation | GitHub Workflows |
 | **Azure Storage** | Model & log persistence | Azure Blob Storage |
 | **Key Vault** | Secrets management | Azure Key Vault |
-| **Function App** | ML inference API | Azure Functions (Python 3.12) |
+| **Function App** | ML inference API | Azure Functions (Python 3.11) |
 | **App Insights** | Monitoring & observability | Azure Application Insights |
 | **Azure ML** | Model registry (optional) | Azure Machine Learning |
 
@@ -83,7 +83,7 @@ Build and automate an end-to-end ML pipeline infrastructure demonstrating:
 - **PowerShell/Bash** - Scripting
 
 ### Application & ML
-- **Python 3.12** - Primary language
+- **Python 3.11** - Primary language
 - **scikit-learn** - Machine learning framework
 - **Azure Functions** - Serverless compute
 - **NumPy/Pandas** - Data processing
@@ -154,7 +154,7 @@ FluxOps/
 - **GitHub Account** for CI/CD
 - **Terraform** >= 1.5.0 ([Download](https://terraform.io/downloads))
 - **Azure CLI** >= 2.50.0 ([Download](https://docs.microsoft.com/cli/azure/install-azure-cli))
-- **Python** >= 3.12 ([Download](https://python.org/downloads))
+- **Python** 3.11 ([Download](https://python.org/downloads))
 - **Git** ([Download](https://git-scm.com/downloads))
 
 ### Validation Script
@@ -356,7 +356,7 @@ The GitHub Actions pipeline automates the entire deployment lifecycle with 5 sta
 - System-assigned managed identity
 - Application Insights integration
 - Environment variables for Key Vault and Storage
-- Python 3.12 runtime
+- Python 3.11 runtime
 
 **API Endpoints:**
 - `GET /api/health` - Health check endpoint
